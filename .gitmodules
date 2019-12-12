@@ -1,0 +1,3 @@
+[submodule "submodules/eigenMLP"]
+	path = submodules/eigenMLP
+	url = https://github.com/daviesthomas/EigenForward
