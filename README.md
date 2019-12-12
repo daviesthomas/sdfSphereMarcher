@@ -19,6 +19,10 @@ render cheburashka weights onto a 512x512 image with phong shading! (example see
 
     ./sdfViewer_bin -H 512 -W 512 -i ../examples/weights/cheburashka.h5 -o ../examples/images/cheburashka.png -s 2
 
+render cheburashka mesh for comparison :)
+
+    ./sdfViewer_bin -H 512 -W 512 -i ../examples/mesh/cheburashka.obj -o ../examples/images/cheburashka-real.png -s 2
+
 ## Example Images!
 
 ### Phong rendering
