@@ -3,6 +3,8 @@
 #include <igl/signed_distance.h>
 #include <igl/read_triangle_mesh.h>
 #include <igl/png/writePNG.h>
+#include <igl/parallel_for.h>
+
 #include <model.h>
 #include <cmath>
 #include <ctime>
@@ -24,6 +26,7 @@ Eigen::VectorXi EMAP;
 MLP mlp;
 float r = 0.5;
 int QUERY_COUNTER = 0;
+enum Shaders { outline, gray, phong };
 
 void sphere_normalization(Eigen::MatrixXd &V, float target_radius){
   typedef double mytype;
@@ -245,16 +248,6 @@ Eigen::Vector2d sphereIntersectionPoint(
     return minMax;
 }
 
-char* getCmdOption(char ** begin, char ** end, const std::string & option)
-{
-    char ** itr = std::find(begin, end, option);
-    if (itr != end && ++itr != end)
-    {
-        return *itr;
-    }
-    return 0;
-}
-
 void triangleMeshLoader(const char * inputFilePath) {
   igl::read_triangle_mesh(inputFilePath, V, F);
   sphere_normalization(V, r);
@@ -264,6 +257,80 @@ void triangleMeshLoader(const char * inputFilePath) {
   igl::per_face_normals(V,F,FN);
   igl::per_vertex_normals(V,F,igl::PER_VERTEX_NORMALS_WEIGHTING_TYPE_ANGLE,FN,VN);
   igl::per_edge_normals(V,F,igl::PER_EDGE_NORMALS_WEIGHTING_TYPE_UNIFORM,FN,EN,E,EMAP);
+}
+
+Eigen::Vector3i fragColor(
+  Eigen::Vector2i &fragCoord, 
+  Eigen::Vector2i &size, 
+  Eigen::Vector3d &eye, 
+  Eigen::MatrixXd &viewToWorld, 
+  int shaderType,
+  float r, 
+  float (*sdf)(Eigen::Vector3d &query) ) 
+  
+{
+  Eigen::Vector3i color;
+
+  Eigen::Vector3d ray  = rayDirection(0.61, size, fragCoord);
+  Eigen::Vector3d worldDir = viewToWorld * ray;
+
+  // only start tracing within sphere
+  Eigen::Vector2d nearFar = sphereIntersectionPoint(eye, worldDir, Eigen::Vector3d(0.0, 0.0, 0.0), r);
+
+  float t = MAX_DIST;
+  if (nearFar[0] < nearFar[1]){
+    t = shortestDistanceToSurface(eye, worldDir, nearFar[0], nearFar[1], sdf);
+  }
+
+  if (t > nearFar[1] - EPSILON) {
+    // didn't hit anything
+    return Eigen::Vector3i(0,0,0);
+  } 
+
+  Eigen::Vector3d p = eye + t*worldDir;
+
+  switch (shaderType)
+  {
+    case outline:
+      // silllloutee (a word I can't spell)
+      return Eigen::Vector3i(255,255,255);
+    case gray: 
+    {
+      float maxDist = eye.norm() + r; //outside edge of bounding sphere
+      float minDist = eye.norm() - r; // inside edge of bounding sphere
+
+      int c = int(((abs(t) - minDist)/(maxDist-minDist))*255.0);
+
+      return Eigen::Vector3i(c,c,c);
+    }
+    case phong: 
+    {
+      // phong
+      Eigen::Vector3d K_a = (fragNormal(p,sdf) + Eigen::Vector3d(1.0, 1.0, 1.0)) / 2.0;
+      Eigen::Vector3d K_d = K_a;
+      Eigen::Vector3d K_s = Eigen::Vector3d(1.0, 1.0, 1.0);
+      float shininess = 10.0;
+
+      Eigen::Vector3d color = phongIllumination(K_a, K_d, K_s, shininess, p, eye, sdf);
+
+      return Eigen::Vector3i(
+        int(color[0]*255.999),
+        int(color[1]*255.999),
+        int(color[2]*255.999)
+      );
+    }
+  }
+}
+
+
+char* getCmdOption(char ** begin, char ** end, const std::string & option)
+{
+    char ** itr = std::find(begin, end, option);
+    if (itr != end && ++itr != end)
+    {
+        return *itr;
+    }
+    return 0;
 }
 
 bool cmdOptionExists(char** begin, char** end, const std::string& option)
@@ -278,7 +345,6 @@ int main(int argc, char *argv[])
   int W = 64;
   const char * inputFilePath = "bumpy-cube.obj";
   const char * outputFilePath = "bumpy-cube.png";
-  enum Shaders { outline, gray, phong };
   int shaderType = outline;
   // sdf function pointer
   float (*pSDF)(Eigen::Vector3d &p){trueSDF};  // default to trueSDF
@@ -341,76 +407,26 @@ int main(int argc, char *argv[])
   std::clock_t startTime;
   startTime = std::clock();
 
+  std::vector <Eigen::Vector2i> coords;
+
   for (int x = 0; x < size[0]; x ++) {
     for (int y = 0; y < size[1]; y ++) {
-      coord[0] = x;
-      coord[1] = y;
-
-      Eigen::Vector3d ray  = rayDirection(0.61, size, coord);
-      Eigen::Vector3d worldDir = viewToWorld * ray;
-
-      // only start tracing within sphere
-      Eigen::Vector2d nearFar = sphereIntersectionPoint(eye, worldDir, Eigen::Vector3d(0.0, 0.0, 0.0), r);
-
-      float t = MAX_DIST;
-      if (nearFar[0] < nearFar[1]){
-        t = shortestDistanceToSurface(eye, worldDir, nearFar[0], nearFar[1], pSDF);
-      }
-
-      if (t > nearFar[1] - EPSILON) {
-        // Didn't hit anything
-        R(x,y) = 0;
-        G(x,y) = 0;
-        B(x,y) = 0;
-        A(x,y) = 255;
-        continue;
-      } 
-
-      Eigen::Vector3d p = eye + t*worldDir;
-
-      switch (shaderType)
-      {
-        case outline:
-          // silllloutee (a word I can't spell)
-          R(x,y) = 255; // 0 --> 0, 1-->255, 0.9999 --> 255
-          G(x,y) = 255;
-          B(x,y) = 255;
-          break;
-        case gray: 
-        {
-          float maxDist = eye.norm() + r; //outside edge of bounding sphere
-          float minDist = eye.norm() - r; // inside edge of bounding sphere
-
-          R(x,y) = int(((abs(t) - minDist)/(maxDist-minDist))*255.0);
-          G(x,y) = int(((abs(t) - minDist)/(maxDist-minDist))*255.0);
-          B(x,y) = int(((abs(t) - minDist)/(maxDist-minDist))*255.0);
-          break;
-        }
-        case phong: 
-        {
-          // phong
-          Eigen::Vector3d K_a = (fragNormal(p,pSDF) + Eigen::Vector3d(1.0, 1.0, 1.0)) / 2.0;
-          Eigen::Vector3d K_d = K_a;
-          Eigen::Vector3d K_s = Eigen::Vector3d(1.0, 1.0, 1.0);
-          float shininess = 10.0;
-
-          Eigen::Vector3d color = phongIllumination(K_a, K_d, K_s, shininess, p, eye, pSDF);
-
-          R(x,y) = int(color[0]*255.999); // 0 --> 0, 1-->255, 0.9999 --> 255
-          G(x,y) = int(color[1]*255.999);
-          B(x,y) = int(color[2]*255.999);
-
-          break;
-        }
-
-        default:
-          return 0;
-          break;
-      }
-      // all schemes set alpha to 1
-      A(x,y) = 255;
+      Eigen::Vector2i coord(x,y);
+      coords.push_back(coord);
     }
   }
+
+  igl::parallel_for(coords.size(),[&](const int i)
+  {
+    std::cout << i << std::endl;
+    Eigen::Vector2i coord = coords[i];
+    Eigen::Vector3i RGB = fragColor(coord, size, eye, viewToWorld, shaderType, r, pSDF);
+
+    R(coord[0],coord[1]) = RGB[0];
+    G(coord[0],coord[1]) = RGB[1];
+    B(coord[0],coord[1]) = RGB[2];
+    A(coord[0],coord[1]) = 255;
+  });
 
   std::cout <<  "Took: " << (std::clock() - startTime)/(double)(CLOCKS_PER_SEC / 1000) << " ms with "<< QUERY_COUNTER << " total queries\n";
 
@@ -418,3 +434,4 @@ int main(int argc, char *argv[])
 
   return 1;
 }
+
