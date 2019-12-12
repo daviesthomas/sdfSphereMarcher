@@ -61,7 +61,7 @@ void sphere_normalization(Eigen::MatrixXd &V, float target_radius){
   T.scale(scale);
 
   for( auto i=0; i < V.rows(); ++i){
-      V.row(i).transpose() = T.linear()*V.row(i).transpose() + T.translation();
+    V.row(i).transpose() = T.linear()*V.row(i).transpose() + T.translation();
   }
 
   // cleanup
@@ -97,55 +97,55 @@ float inferSDF(Eigen::Vector3d &p) {
 
 // nice implementation: https://www.shadertoy.com/view/4tcGDr
 float shortestDistanceToSurface(Eigen::Vector3d &eye, Eigen::Vector3d &dir, float start, float end, float (*sdf)(Eigen::Vector3d &query)) {
-    float depth = start;
+  float depth = start;
 
-    Eigen::Vector3d p; 
+  Eigen::Vector3d p; 
 
-    for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
-      p = eye + depth * dir;
+  for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
+    p = eye + depth * dir;
 
-      float dist = sdf(p);
+    float dist = sdf(p);
 
-      if (dist < EPSILON) {
-        return depth;
-      }
-      depth += dist;
-      if (depth >= end) {
-          return end;
-      }
+    if (dist < EPSILON) {
+      return depth;
     }
-  
-    return end;
+    depth += dist;
+    if (depth >= end) {
+        return end;
+    }
+  }
+
+  return end;
 }
 
 
 // field of view in rads!
 Eigen::Vector3d rayDirection(float fieldOfView, Eigen::Vector2i &size, Eigen::Vector2i &coord) {
-    Eigen::Vector2d xy = (coord.cast <double> ()) - (size.cast <double> ()) / 2.0;
-    float z = size[1] / std::tan(fieldOfView / 2.0);
+  Eigen::Vector2d xy = (coord.cast <double> ()) - (size.cast <double> ()) / 2.0;
+  float z = size[1] / std::tan(fieldOfView / 2.0);
 
-    Eigen::Vector3d rayDir;
-    rayDir << xy[0] , xy[1], z;
+  Eigen::Vector3d rayDir;
+  rayDir << xy[0] , xy[1], z;
 
-    rayDir.normalize();
+  rayDir.normalize();
 
-    return rayDir;
+  return rayDir;
 }
 
 Eigen::MatrixXd lookAt(Eigen::Vector3d eye, Eigen::Vector3d center, Eigen::Vector3d up) {
-    Eigen::Vector3d f = (center - eye).normalized();
-    Eigen::Vector3d u = up.normalized();
-    Eigen::Vector3d s = f.cross(u).normalized();
-    u = s.cross(f);
-    
-    Eigen::Matrix4d res;
+  Eigen::Vector3d f = (center - eye).normalized();
+  Eigen::Vector3d u = up.normalized();
+  Eigen::Vector3d s = f.cross(u).normalized();
+  u = s.cross(f);
+  
+  Eigen::Matrix4d res;
 
-    res << s.x(), s.y(), s.z(), -s.dot(eye),
-            u.x(),u.y(),u.z(),-u.dot(eye),
-            -f.x(),-f.y(),-f.z(),f.dot(eye),
-            0,0,0,1;
+  res << s.x(), s.y(), s.z(), -s.dot(eye),
+          u.x(),u.y(),u.z(),-u.dot(eye),
+          -f.x(),-f.y(),-f.z(),f.dot(eye),
+          0,0,0,1;
 
-    return res;
+  return res;
 }
 
 Eigen::Vector3d fragNormal(Eigen::Vector3d &p, float (*sdf)(Eigen::Vector3d &query)) {
@@ -171,57 +171,57 @@ Eigen::Vector3d phongContribForLight(Eigen::Vector3d &k_d, Eigen::Vector3d &k_s,
                           Eigen::Vector3d &p, Eigen::Vector3d &eye,Eigen::Vector3d &lightPos, 
                           Eigen::Vector3d &lightIntensity, float (*sdf)(Eigen::Vector3d &query) ) {
 
-    Eigen::Vector3d N = fragNormal(p, sdf);
+  Eigen::Vector3d N = fragNormal(p, sdf);
 
-    Eigen::Vector3d L = (lightPos - p).normalized();
+  Eigen::Vector3d L = (lightPos - p).normalized();
 
-    Eigen::Vector3d V = (eye - p).normalized();
+  Eigen::Vector3d V = (eye - p).normalized();
 
-    Eigen::Vector3d R = -L - 2.0 * N.dot(-L) * N;  // reflectance dir
-    
-    float dotLN = L.dot(N);
+  Eigen::Vector3d R = -L - 2.0 * N.dot(-L) * N;  // reflectance dir
+  
+  float dotLN = L.dot(N);
 
-    float dotRV = R.dot(V);
+  float dotRV = R.dot(V);
 
-    
-    if (dotLN < 0.0) {
-      // Light not visible from this point on the surface
-      return Eigen::Vector3d(0.0, 0.0, 0.0);
-    } 
-    
-    if (dotRV < 0.0) {
-      // diffuse only
-      return lightIntensity.cwiseProduct(k_d * dotLN);
-    }
+  
+  if (dotLN < 0.0) {
+    // Light not visible from this point on the surface
+    return Eigen::Vector3d(0.0, 0.0, 0.0);
+  } 
+  
+  if (dotRV < 0.0) {
+    // diffuse only
+    return lightIntensity.cwiseProduct(k_d * dotLN);
+  }
 
 
-    return lightIntensity.cwiseProduct(k_d * dotLN + k_s * pow(dotRV, alpha)) ;
+  return lightIntensity.cwiseProduct(k_d * dotLN + k_s * pow(dotRV, alpha)) ;
 }
 
 Eigen::Vector3d phongIllumination(Eigen::Vector3d &k_a, Eigen::Vector3d &k_d, Eigen::Vector3d &k_s, 
                           float alpha, Eigen::Vector3d &p, Eigen::Vector3d &eye, float (*sdf)(Eigen::Vector3d &query)) {
                             
-    const Eigen::Vector3d ambientLight = 0.5 * Eigen::Vector3d(1.0, 1.0, 1.0);
-    Eigen::Vector3d color = ambientLight.cwiseProduct(k_a);
-    
-    //Eigen::Vector3d light1Pos = Eigen::Vector3d(
-    //                              5.0,
-    //                              2.0,
-    //                              5.0);
-    //Eigen::Vector3d light1Intensity = Eigen::Vector3d(0.4, 0.4, 0.4);
-    
-    //color += phongContribForLight(k_d, k_s, alpha, p, eye,
-    //                              light1Pos,
-    //                              light1Intensity);
+  const Eigen::Vector3d ambientLight = 0.5 * Eigen::Vector3d(1.0, 1.0, 1.0);
+  Eigen::Vector3d color = ambientLight.cwiseProduct(k_a);
+  
+  //Eigen::Vector3d light1Pos = Eigen::Vector3d(
+  //                              5.0,
+  //                              2.0,
+  //                              5.0);
+  //Eigen::Vector3d light1Intensity = Eigen::Vector3d(0.4, 0.4, 0.4);
+  
+  //color += phongContribForLight(k_d, k_s, alpha, p, eye,
+  //                              light1Pos,
+  //                              light1Intensity);
 
-    
-    Eigen::Vector3d light2Pos = eye;
-    Eigen::Vector3d light2Intensity = Eigen::Vector3d(0.8, 0.8, 0.8);
-    
-    color += phongContribForLight(k_d, k_s, alpha, p, eye,
-                                  light2Pos,
-                                  light2Intensity, sdf);    
-    return color;
+  
+  Eigen::Vector3d light2Pos = eye;
+  Eigen::Vector3d light2Intensity = Eigen::Vector3d(0.8, 0.8, 0.8);
+  
+  color += phongContribForLight(k_d, k_s, alpha, p, eye,
+                                light2Pos,
+                                light2Intensity, sdf);    
+  return color;
 }
 
 // Find t value for vector intersection with line
@@ -231,21 +231,21 @@ Eigen::Vector3d phongIllumination(Eigen::Vector3d &k_a, Eigen::Vector3d &k_d, Ei
 // r, radius of sphere
 Eigen::Vector2d sphereIntersectionPoint(
   Eigen::Vector3d &P, Eigen::Vector3d &U, Eigen::Vector3d C, float r) {
-    Eigen::Vector2d minMax; // the near and far intersections with sphere
-    Eigen::Vector3d Q = P - C;
-    double a = U.dot(U);
-    double b = 2.0 * Q.dot(U);
-    double c = Q.dot(Q) - r*r;
-    double discriminant = b*b - 4*a*c;
+  Eigen::Vector2d minMax; // the near and far intersections with sphere
+  Eigen::Vector3d Q = P - C;
+  double a = U.dot(U);
+  double b = 2.0 * Q.dot(U);
+  double c = Q.dot(Q) - r*r;
+  double discriminant = b*b - 4*a*c;
 
-    if(discriminant < 0){
-      minMax << MAX_DIST, MAX_DIST;
-    }
-    else{
-      minMax << (-b - sqrt(discriminant)) / (2.0*a), (-b + sqrt(discriminant)) / (2.0*a);
-    }
+  if(discriminant < 0){
+    minMax << MAX_DIST, MAX_DIST;
+  }
+  else{
+    minMax << (-b - sqrt(discriminant)) / (2.0*a), (-b + sqrt(discriminant)) / (2.0*a);
+  }
 
-    return minMax;
+  return minMax;
 }
 
 void triangleMeshLoader(const char * inputFilePath) {
@@ -325,17 +325,17 @@ Eigen::Vector3i fragColor(
 
 char* getCmdOption(char ** begin, char ** end, const std::string & option)
 {
-    char ** itr = std::find(begin, end, option);
-    if (itr != end && ++itr != end)
-    {
-        return *itr;
-    }
-    return 0;
+  char ** itr = std::find(begin, end, option);
+  if (itr != end && ++itr != end)
+  {
+      return *itr;
+  }
+  return 0;
 }
 
 bool cmdOptionExists(char** begin, char** end, const std::string& option)
 {
-    return std::find(begin, end, option) != end;
+  return std::find(begin, end, option) != end;
 }
 
 int main(int argc, char *argv[])
