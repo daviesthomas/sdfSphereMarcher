@@ -26,7 +26,7 @@ render cheburashka mesh for comparison :)
 ## Example Images!
 
 ### Phong rendering
-![alt text](https://github.com/daviesthomas/sdfSphereMarcher/blob/master/examples/images/armadillo.png)
+![alt text](https://github.com/daviesthomas/sdfSphereMarcher/blob/master/examples/images/armadillo.png = 250x250)
 ![alt text](https://github.com/daviesthomas/sdfSphereMarcher/blob/master/examples/images/arm.png)
 ![alt text](https://github.com/daviesthomas/sdfSphereMarcher/blob/master/examples/images/cow.png)
 ![alt text](https://github.com/daviesthomas/sdfSphereMarcher/blob/master/examples/images/horse.png)
