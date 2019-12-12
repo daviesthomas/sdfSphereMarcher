@@ -6,6 +6,11 @@ A tool for sphere marching over mlps trained to produce sdf values given point q
 First clone repo (and all dependencies)
 
     git clone --recursive https://github.com/daviesthomas/sdfSphereMarcher.git
+    cd sdfSphereMarcher
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    make -j 8
+
 ## Usage
 
     ./sdfViewer_bin 
