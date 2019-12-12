@@ -8,14 +8,15 @@ First clone repo (and all dependencies)
     git clone --recursive https://github.com/daviesthomas/sdfSphereMarcher.git
 ## Usage
 
-./sdfViewer_bin 
-    -H image height
-    -W image width
-    -i input mesh or weights
-    -o output image path
-    -s shading type (0: outline, 1: grayscale, 2: phong)
+    ./sdfViewer_bin 
+        -H image height
+        -W image width
+        -i input mesh or weights
+        -o output image path
+        -s shading type (0: outline, 1: grayscale, 2: phong)
 
-render cheburashka weights onto a 512x512 image with phong shading!
+render cheburashka weights onto a 512x512 image with phong shading! (example seen below)
+
     ./sdfViewer_bin -H 512 -W 512 -i ../examples/weights/cheburashka.h5 -o ../examples/images/cheburashka.png -s 2
 
 ## Example Images!
