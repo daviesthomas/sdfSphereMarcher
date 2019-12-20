@@ -3,6 +3,7 @@
 #include <igl/signed_distance.h>
 #include <igl/read_triangle_mesh.h>
 #include <igl/png/writePNG.h>
+#include <igl/png/readPNG.h>
 #include <igl/parallel_for.h>
 
 #include <model.h>
@@ -23,10 +24,12 @@ Eigen::MatrixXd FN,VN,EN;
 Eigen::MatrixXi E;
 Eigen::VectorXi EMAP;
 
+Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> matcapR,matcapG,matcapB,matcapA;
+
 MLP mlp;
-float r = 0.5;
+float r = 1.0;
 int QUERY_COUNTER = 0;
-enum Shaders { outline, gray, phong };
+enum Shaders { outline, gray, phong, matcap };
 
 void sphere_normalization(Eigen::MatrixXd &V, float target_radius){
   typedef double mytype;
@@ -259,7 +262,7 @@ void triangleMeshLoader(const char * inputFilePath) {
   igl::per_edge_normals(V,F,igl::PER_EDGE_NORMALS_WEIGHTING_TYPE_UNIFORM,FN,EN,E,EMAP);
 }
 
-Eigen::Vector3i fragColor(
+Eigen::Vector4i fragColor(
   Eigen::Vector2i &fragCoord, 
   Eigen::Vector2i &size, 
   Eigen::Vector3d &eye, 
@@ -284,7 +287,7 @@ Eigen::Vector3i fragColor(
 
   if (t > nearFar[1] - EPSILON) {
     // didn't hit anything
-    return Eigen::Vector3i(0,0,0);
+    return Eigen::Vector4i(0,0,0,0);
   } 
 
   Eigen::Vector3d p = eye + t*worldDir;
@@ -293,7 +296,7 @@ Eigen::Vector3i fragColor(
   {
     case outline:
       // silllloutee (a word I can't spell)
-      return Eigen::Vector3i(255,255,255);
+      return Eigen::Vector4i(255,255,255, 255);
     case gray: 
     {
       float maxDist = eye.norm() + r; //outside edge of bounding sphere
@@ -301,7 +304,7 @@ Eigen::Vector3i fragColor(
 
       int c = int(((abs(t) - minDist)/(maxDist-minDist))*255.0);
 
-      return Eigen::Vector3i(c,c,c);
+      return Eigen::Vector4i(c,c,c,255);
     }
     case phong: 
     {
@@ -313,10 +316,24 @@ Eigen::Vector3i fragColor(
 
       Eigen::Vector3d color = phongIllumination(K_a, K_d, K_s, shininess, p, eye, sdf);
 
-      return Eigen::Vector3i(
+      return Eigen::Vector4i(
         int(color[0]*255.999),
         int(color[1]*255.999),
-        int(color[2]*255.999)
+        int(color[2]*255.999),
+        255
+      );
+    }
+    case matcap:
+    {
+      Eigen::Vector3d normal_eye = fragNormal(p,sdf).normalized();
+      Eigen::Vector2i uv;
+      uv << int((normal_eye(0)*0.5 + 0.5)*matcapR.rows()), int((normal_eye(1)*0.5 + 0.5)*matcapR.cols());
+
+      return Eigen::Vector4i(
+        int(matcapR(uv(0), uv(1))),
+        int(matcapG(uv(0), uv(1))),
+        int(matcapB(uv(0), uv(1))),
+        int(matcapA(uv(0), uv(1)))
       );
     }
   }
@@ -389,6 +406,18 @@ int main(int argc, char *argv[])
     shaderType = atoi(getCmdOption(argv, argv + argc, "-s"));
   }
 
+
+
+  if (shaderType == matcap) {
+    if (cmdOptionExists(argv, argv + argc, "-m")) 
+    {
+      igl::png::readPNG(getCmdOption(argv, argv + argc, "-m"), matcapR,matcapG,matcapB,matcapA);
+    } else {
+      std::cout << "you must supply matcap png image if using matcap mode\n";
+    }
+  }
+  
+
   Eigen::Vector3d eye;
   eye << 0.0, 0.0, -5.0;
 
@@ -418,18 +447,18 @@ int main(int argc, char *argv[])
 
   igl::parallel_for(coords.size(),[&](const int i)
   {
-    std::cout << i << std::endl;
     Eigen::Vector2i coord = coords[i];
-    Eigen::Vector3i RGB = fragColor(coord, size, eye, viewToWorld, shaderType, r, pSDF);
+    Eigen::Vector4i RGBA = fragColor(coord, size, eye, viewToWorld, shaderType, r, pSDF);
 
-    R(coord[0],coord[1]) = RGB[0];
-    G(coord[0],coord[1]) = RGB[1];
-    B(coord[0],coord[1]) = RGB[2];
-    A(coord[0],coord[1]) = 255;
+    R(coord[0],coord[1]) = RGBA[0];
+    G(coord[0],coord[1]) = RGBA[1];
+    B(coord[0],coord[1]) = RGBA[2];
+    A(coord[0],coord[1]) = RGBA[3];
   });
 
   std::cout <<  "Took: " << (std::clock() - startTime)/(double)(CLOCKS_PER_SEC / 1000) << " ms with "<< QUERY_COUNTER << " total queries\n";
 
+  std::cout << "Saving Image to " << outputFilePath << std::endl;
   igl::png::writePNG(R,G,B,A, outputFilePath);
 
   return 1;
